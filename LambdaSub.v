@@ -2,6 +2,9 @@ Require Import List String Rewriting.
 Import ListNotations.
 Open Scope string_scope.
 
+Ltac inv H := inversion H; subst; clear H; try congruence.
+Ltac econs := econstructor; eauto; try congruence.
+
 (** * Preliminary definitions *)
 
 (** The denumerable sets for identifiers and labels will be that of arbitrary strings, for the sake
@@ -345,31 +348,163 @@ Axiom succ_typing : forall Γ, Γ ⊢ succ : nat → nat.
 
 Definition t22 τ := λ("f" : τ) <succ> ((<"f"> {"ℓ₁" = 31; "ℓ₂" = 73})·"ℓ₃").
 
-(** Canonical example of typing for [t22]. *)
+(** Canonical example of typing for [f] in [t22]. *)
 
-Example τ22 := ({"ℓ₁" : nat; "ℓ₂" : nat} → {"ℓ₃" : nat})%types.
+Example τf := ({"ℓ₁" : nat; "ℓ₂" : nat} → {"ℓ₃" : nat})%types.
 
-Example t22_typing : ⊢ (t22 τ22) : τ22 → nat.
+Ltac wf :=
+  match goal with
+  |- well_formed ?Γ => intros a a' **; firstorder; destruct a, a'; congruence
+  | _ => idtac
+  end.
+
+Example t22_typing : ⊢ (t22 τf) : τf → nat.
 Proof.
   unfold t22. eapply (Abs [] []). simpl.
-  econstructor.
+  econs.
   * eapply succ_typing.
-  * econstructor.
-    - econstructor.
-      + econstructor.
-        ** unfold well_formed. firstorder.
-           destruct a, a'. congruence.
-        ** econstructor. econstructor.
-      + econstructor. firstorder.
-        ** exists nat. econstructor.
-           -- econstructor. congruence.
-           -- inversion H. econstructor.
-              unfold well_formed. firstorder.
-              destruct a, a'. congruence.
-        ** exists nat. econstructor.
-           -- right. econstructor. congruence.
-           -- inversion H. econstructor.
-              unfold well_formed. firstorder.
-              destruct a, a'. congruence.
-    - econstructor. congruence.
+  * econs.
+    - econs.
+      + econs.
+        ** wf.
+        ** econs. econs.
+      + econs. firstorder.
+        ** exists nat. econs.
+           -- econs.
+           -- inv H. econs. wf.
+        ** exists nat. econs.
+           -- right. econs.
+           -- inv H. econs. wf.
+    - econs.
+Qed.
+
+(** *** ----- WARNING -----
+
+        What was initially a simple attempt at justifying an answer, turned into a quite long
+        philosophical rambling about the fundamental nature of typing.
+        
+        The trace of this reflection has been left in this document, as of potential interest for
+        the reader. But by no mean should the reader feel obliged to read it, not to mention
+        interpret it as an expression of the beliefs of the author.
+        
+        Highly experimental work ahead! #</br># *)
+
+(* begin hide *)
+(* end hide *)
+
+(** In all generality, one might describe the set of types ascribable to a term [t] as all
+    _supertypes_ of some minimal, maximally refined type [τ₀]. Formally, we have:
+    - [⊢ t : τ₀]
+    - [forall τ, ⊢ t : τ -> τ₀ <: τ]
+    The intuitive statement that [τf] is canonical can then be reformulated as an instance of the
+    second proposition:
+    - [forall τ, ⊢ (t22 τf) : τ -> (τf → nat) <: τ]
+    This property should derive from the definition of [<:], which can be induced empirically by
+    analysing the process of coming up with the idea that [τf] is canonical.
+    
+    So how did we infer the type [τf] of [f] in [t22]? One way to see it is that we executed
+    mentally (and unconsciously) some _type inference algorithm_, with [t22] as input. But this
+    presupposes that we already had the rules for [<:] present somewhere in our mind, and does not
+    explain where they come from, nor how we came up with them!
+    
+    A more fundamental way of viewing the problem is by thinking of the type of a term as its
+    meaning, and of _meaning as usage_ (in a Wittgensteinian tradition). The question is thus: how
+    is [f] _used_ inside of [t22]? By looking at the _context_ surrounding its (only) occurrence, we
+    first see that it is applied to a record containing exactly 2 fields [ℓ₁] and [ℓ₂] of type
+    [nat]. This informs us of at least two things:
+    - since it is _applied_, [f] must be a function, and thus of an arrow type [?τ → ?τ']
+    - the type [?τ] of its argument must be a _record_ type
+    For the moment nothing new, this is just familiar type inference through unification. Now the
+    most straightforward choice for [?τ] would be [{ℓ₁ : nat; ℓ₂ : nat}], in that it matches
+    directly the shape of the argument. But as soon as we start thinking not only about how [f] _is
+    used_ in the context of this application, but also about how it _might use_ its argument, it
+    appears that allowing only this type for [?τ] would be too much of a restriction. Indeed, what
+    if [f] uses only the field [ℓ₁]? Then it might take as argument as well records that contain
+    only the [ℓ₁] field; and the same reasoning applies for [ℓ₂], or even the empty record if [f]
+    never uses its argument. But we cannot _allow_ any record type that contains fields other than
+    [ℓ₁] and [ℓ₂] with type [nat], because even if _not all_ functions with such input types use
+    some other field than [ℓ₁] and [ℓ₂], or use [ℓ₁] or [ℓ₂] as something else than a natural
+    number, _some_ of these functions do, and we want to _forbid_ them, because they would not work
+    properly with the argument provided to them in [t22].
+    
+    In fact, the identification of [{ℓ₁ : nat; ℓ₂ : nat}] as a natural candidate also used
+    implicitly the kind of reasoning we have just outlined. Indeed, the type that really matches
+    directly the shape of the argument is... the argument itself! But since singletons of terms do
+    not pertain to the language of types, we immediately recognized the field values as natural
+    numbers. And again, this process of recognition can be seen in two ways: the _technical_ one,
+    where numeral notation is parsed with a formal grammar (which highlights how the concept of type
+    might collapse with that of grammar); and the _conceptual_ one, which imagines how [f] might use
+    such field values. Here it gets a little more difficult to think about all the ways a natural
+    number may be used, in contrast with records which intuitively can only be projected on their
+    fields. The key is to think of the most direct way to use it; that is, what is the primitive
+    operation on natural numbers? Ironically, the insight comes from... type theory itself
+    (Martin-Löf's one), where the elimination rule for natural numbers builds a _recursor_. So if we
+    consider e.g. [31], we would like to allow any other term which does not offer any usage that is
+    not already possible with [31], in the same way that we allowed as argument of [f] any term
+    which cannot be projected on something else than [ℓ₁] and [ℓ₂], viewed as natural numbers. This
+    leads us to consider all other natural numbers, since the recursor works the same for all
+    natural numbers. But one might consider a generalization of natural numbers as an instance of
+    inductive construction, as is done in the Calculus of Inductive Constructions: in this case, it
+    is possible to build a recursor (pattern-matching operator) that works the same _for all
+    inductive types_. Following our previous argument, should we then allow any term of an inductive
+    type for [ℓ₁] and [ℓ₂], rather than just natural numbers? It seems like we must impose an
+    arbitrary distinction between "ways" to use a term, if we want to have a subtyping relation that
+    does not make the type system trivial by allowing to ascribe any (inductive) type to a term. And
+    this distinction is precisely the purpose of having different _names_ for types, and
+    notations/constructors for terms of these types. So in the end, the numeral notation _does
+    matter_ if we want a middle ground between an _unusable_, too _conservative_ type system that
+    _distinguishes_ all terms, thus _forbidding_ any kind of common usage; and a _useless_, too
+    _liberal_ type system that _identifies_ all terms (which is equivalent to a term system that
+    identifies all types/usages, in the previously mentionned form of a unique eliminator), thus
+    _allowing_ every kind of common usage (including wrong ones).
+
+    This philosophical analysis allows us to better understand the motivation of some design choices
+    in already existing type systems. Coq is an interesting example, as it claims to be very
+    expressive (liberal), while staying strongly consistent (conservative), which is necessary for
+    the purpose of formalizing all of mathematics. Such a tradeoff implies that most
+    automation/usability features will always be compensated by some manual work imposed to the user
+    in another part of the system, sometimes leaving to her the responsibilty of not breaking
+    consistency. For example, even though Coq has a general induction mechanism, it must be
+    reinstanciated for each inductive type, the latter having to be completely declared, specified
+    and _named_ by the user. This can be justified by the aforementioned necessity to keep a
+    distinction between eliminators, so that there is no ambiguity in the possible usages of an
+    expression. Also, even if inductive constructors and custom notations give a powerful mean of
+    building concisely a great variety of terms, each term will in the end have a unique typing.
+    This is again caused by the great generality of dependent inductive types, which by the unity of
+    their form, need to be discriminated arbitrarily and systematically by _names_. Then the
+    subtyping/coercion mechanism can only be as arbitrary as these names, and therefore its
+    specification is left to the user, with here the additional risk of breaking consistency (since
+    there is no way to decide its correctness in general). *)
+
+(** ** Question 3 *)
+
+Reserved Infix "<:" (at level 30).
+
+Inductive subtype : type -> type -> Prop :=
+| STop τ :
+  τ <: ⊤
+| SNat :
+  nat <: nat
+| SArr τ₁ τ₁' τ₂ τ₂':
+  τ₂ <: τ₁ -> τ₁' <: τ₂' ->
+  τ₁ → τ₁' <: τ₂ → τ₂'
+| SRec fts fts' :
+  List.Forall (fun ft => List.In ft fts) fts' ->
+  Types.Rec fts <: Types.Rec fts'
+where "τ <: τ'" := (subtype τ τ') : typing_scope.
+
+(** ** Question 4 *)
+
+Lemma subtype_refl : forall τ,
+  τ <: τ.
+Proof.
+  induction τ; econs.
+  now apply Forall_forall.
+Qed. 
+
+Lemma subtype_trans : forall τ' τ τ'',
+  τ <: τ' -> τ' <: τ'' -> τ <: τ''.
+Proof.
+  induction τ'; intros * H H'; inv H; inv H'; econs.
+  rewrite Forall_forall in *. auto.
 Qed.
