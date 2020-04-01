@@ -433,7 +433,7 @@ Qed.
     not pertain to the language of types, we immediately recognized the field values as natural
     numbers. And again, this process of recognition can be seen in two ways: the _technical_ one,
     where numeral notation is parsed with a formal grammar (which highlights how the concept of type
-    might collapse with that of grammar); and the _conceptual_ one, which imagines how [f] might use
+    might collapse with that of formal language); and the _conceptual_ one, which imagines how [f] might use
     such field values. Here it gets a little more difficult to think about all the ways a natural
     number may be used, in contrast with records which intuitively can only be projected on their
     fields. The key is to think of the most direct way to use it; that is, what is the primitive
